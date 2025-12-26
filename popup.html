@@ -1,0 +1,237 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Language Learning Translator</title>
+  <link rel="stylesheet" href="popup.css">
+</head>
+<body>
+  <div class="container">
+    <!-- Header -->
+    <header>
+      <div style="display: flex; align-items: center; gap: 10px; justify-content: center;">
+        <img src="icons/icon48.png" alt="Lingua-Lens" style="width: 32px; height: 32px;">
+        <h1 style="margin: 0;">Lingua-Lens</h1>
+      </div>
+      <p class="subtitle">Build vocabulary across websites</p>
+    </header>
+
+    <!-- Stats -->
+    <div class="stats">
+      <div class="stat-item">
+        <span class="stat-value" id="wordCount">0</span>
+        <span class="stat-label">Known Words</span>
+      </div>
+    </div>
+
+    <!-- Settings Section -->
+    <section class="section">
+      <h2>Settings</h2>
+
+      <div class="form-group">
+        <label for="targetLanguage">Target Language (Learning)</label>
+        <select id="targetLanguage">
+          <option value="zh-CN">Chinese (Simplified)</option>
+          <option value="zh-TW">Chinese (Traditional)</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="it">Italian</option>
+          <option value="pt">Portuguese</option>
+          <option value="ru">Russian</option>
+          <option value="ar">Arabic</option>
+          <option value="hi">Hindi</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="sourceLanguage">Source Language (Native)</label>
+        <select id="sourceLanguage">
+          <option value="en">English</option>
+          <option value="es">Spanish</option>
+          <option value="fr">French</option>
+          <option value="de">German</option>
+          <option value="ja">Japanese</option>
+          <option value="ko">Korean</option>
+          <option value="it">Italian</option>
+          <option value="pt">Portuguese</option>
+          <option value="ru">Russian</option>
+          <option value="zh-CN">Chinese (Simplified)</option>
+        </select>
+      </div>
+
+      <div class="form-group">
+        <label for="apiKey">Google Translate API Key</label>
+        <input type="password" id="apiKey" placeholder="Enter your API key...">
+        <small>Get your API key from <a href="https://console.cloud.google.com/apis/credentials" target="_blank">Google Cloud Console</a></small>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" id="autoTranslate">
+          <span>Auto-translate words on pages</span>
+        </label>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" id="showTooltips">
+          <span>Show original text on hover</span>
+        </label>
+      </div>
+
+      <div class="form-group checkbox-group youtube-feature">
+        <label>
+          <input type="checkbox" id="youtubeSubtitles">
+          <span>📺 Translate YouTube subtitles</span>
+        </label>
+      </div>
+
+      <div class="form-group">
+        <label for="excludedUrls">Excluded Websites (one per line)</label>
+        <textarea id="excludedUrls" rows="4" placeholder="reddit.com&#10;facebook.com&#10;twitter.com"></textarea>
+        <small>Extension won't translate words on these websites</small>
+      </div>
+
+      <button id="saveSettings" class="btn btn-primary">Save Settings</button>
+    </section>
+
+    <!-- Quick Add Word Section -->
+    <section class="section">
+      <h2>Quick Add Word</h2>
+      <p class="language-hint" id="languageHint">Translating from <strong id="sourceLangName">English</strong> to <strong id="targetLangName">Chinese</strong></p>
+
+      <div class="form-group">
+        <label for="quickWord">Word</label>
+        <input type="text" id="quickWord" placeholder="Enter word...">
+      </div>
+
+      <div class="form-group">
+        <label for="quickTranslation">Translation (optional)</label>
+        <input type="text" id="quickTranslation" placeholder="Auto-filled or enter manually...">
+      </div>
+
+      <div class="quick-add-actions">
+        <button id="translateAndAdd" class="btn btn-primary">Translate & Add</button>
+        <button id="addManually" class="btn btn-secondary">Add Manually</button>
+      </div>
+    </section>
+
+    <!-- Known Words Section -->
+    <section class="section">
+      <h2>Known Words</h2>
+
+      <div class="search-box">
+        <input type="text" id="searchWords" placeholder="Search words...">
+      </div>
+
+      <div id="wordsList" class="words-list">
+        <!-- Words will be populated here -->
+      </div>
+
+      <div class="word-actions">
+        <button id="exportWords" class="btn btn-secondary">Export Words</button>
+        <label for="importFile" class="btn btn-secondary">
+          Import Words
+          <input type="file" id="importFile" accept=".json" style="display: none;">
+        </label>
+        <button id="clearWords" class="btn btn-danger">Clear All</button>
+      </div>
+    </section>
+
+    <!-- Chinese Known Words Section -->
+    <section class="section chinese-section">
+      <h2>Chinese Known Words</h2>
+      <p class="subtitle">Mark Chinese words you know to track them across websites</p>
+
+      <div class="stats">
+        <div class="stat-item">
+          <span class="stat-value" id="chineseWordCount">0</span>
+          <span class="stat-label">Known Chinese Words</span>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="chineseWord">Add Chinese Word</label>
+        <div style="display: flex; gap: 8px;">
+          <input type="text" id="chineseWord" placeholder="Enter Chinese word...">
+          <button id="addChineseWord" class="btn btn-primary">Add</button>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="highlightStyle">Highlight Style</label>
+        <select id="highlightStyle">
+          <option value="underline">Underline (Green)</option>
+          <option value="bold">Bold (Green)</option>
+          <option value="highlight">Highlight (Green Background)</option>
+          <option value="colored">Colored (Blue)</option>
+        </select>
+      </div>
+    </section>
+
+    <!-- Synology Server Sync Section -->
+    <section class="section sync-section">
+      <h2>Synology Server Sync</h2>
+      <p class="subtitle">Sync with Chinese Word Map (192.168.1.222:3000)</p>
+
+      <div class="sync-status">
+        <div>
+          Status: <strong id="syncStatus" class="status-never">Not configured</strong>
+        </div>
+        <div>
+          Last Sync: <strong id="lastSyncTime">Never</strong>
+        </div>
+        <div>
+          Synced Words: <strong id="lastSyncCount">0</strong>
+        </div>
+      </div>
+
+      <div class="form-group">
+        <label for="syncToken">Sync Token</label>
+        <input type="text" id="syncToken" placeholder="Paste sync token from website...">
+      </div>
+
+      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+        <button id="saveSyncToken" class="btn btn-primary">Save Token</button>
+        <button id="syncNow" class="btn btn-secondary">Sync Now</button>
+        <button id="visitWebsite" class="btn btn-secondary">Open Website</button>
+      </div>
+
+      <div class="form-group checkbox-group">
+        <label>
+          <input type="checkbox" id="autoSync" checked>
+          <span>Enable automatic sync (every 60 minutes)</span>
+        </label>
+      </div>
+    </section>
+
+    <!-- Usage Instructions -->
+    <section class="section instructions">
+      <h2>How to Use</h2>
+      <ol>
+        <li>Add your <strong>Google Translate API key</strong> for standard translation</li>
+        <li><strong>Select a word</strong> on any webpage, right-click, and choose "Translate & Save Word"</li>
+        <li>The word will be <strong>automatically translated</strong> across all websites</li>
+        <li><strong>Hover</strong> over translated words to see the original</li>
+        <li><strong>Select Chinese text</strong> and right-click → "Mark Chinese Word as Known"</li>
+        <li><strong>Select text</strong> and right-click → "Read Selected Text Aloud" to hear it spoken</li>
+      </ol>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+      <p class="version">v1.2.0</p>
+      <div id="status" class="status"></div>
+    </footer>
+  </div>
+
+  <script src="pinyin-pro.min.js"></script>
+  <script src="pinyin-helper.js"></script>
+  <script src="storage.js"></script>
+  <script src="popup.js"></script>
+</body>
+</html>

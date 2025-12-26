@@ -1,0 +1,42 @@
+/* Lingua-Lens Styles - Chinese Word Highlighting */
+
+/* Default underline style for known Chinese words */
+.chinese-known-word {
+  text-decoration: underline;
+  text-decoration-color: #4CAF50;
+  text-decoration-thickness: 2px;
+  cursor: help;
+  padding: 0 3px;
+  margin: 0 1px;
+  display: inline-block;
+}
+
+/* Alternative style: Bold */
+.chinese-known-word.bold {
+  font-weight: bold;
+  text-decoration: none;
+  color: #2E7D32;
+  padding: 0 3px;
+  margin: 0 1px;
+  display: inline-block;
+}
+
+/* Alternative style: Highlight background */
+.chinese-known-word.highlight {
+  background-color: #C8E6C9;
+  text-decoration: none;
+  padding: 0 4px;
+  margin: 0 2px;
+  border-radius: 2px;
+  display: inline-block;
+}
+
+/* Alternative style: Colored text */
+.chinese-known-word.colored {
+  color: #1976D2;
+  text-decoration: none;
+  font-weight: 500;
+  padding: 0 3px;
+  margin: 0 1px;
+  display: inline-block;
+}

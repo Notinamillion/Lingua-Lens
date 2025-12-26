@@ -1,0 +1,53 @@
+{
+  "manifest_version": 3,
+  "name": "Lingua-Lens",
+  "version": "1.2.0",
+  "description": "Learn languages by translating selected words and automatically replacing them across websites",
+  "icons": {
+    "16": "icons/icon16.png",
+    "48": "icons/icon48.png",
+    "128": "icons/icon128.png"
+  },
+  "permissions": [
+    "storage",
+    "activeTab",
+    "contextMenus",
+    "unlimitedStorage",
+    "notifications",
+    "alarms"
+  ],
+  "host_permissions": [
+    "https://translation.googleapis.com/*",
+    "https://api.anthropic.com/*",
+    "https://api.openai.com/*",
+    "https://generativelanguage.googleapis.com/*",
+    "http://192.168.1.222:3000/*",
+    "<all_urls>"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  },
+  "action": {
+    "default_popup": "popup.html",
+    "default_icon": {
+      "16": "icons/icon16.png",
+      "48": "icons/icon48.png",
+      "128": "icons/icon128.png"
+    }
+  },
+  "content_scripts": [
+    {
+      "matches": ["<all_urls>"],
+      "js": ["pinyin-pro.min.js", "pinyin-helper.js", "compound-words.js", "storage.js", "tts-reader.js", "content.js"],
+      "css": ["styles.css"],
+      "run_at": "document_idle",
+      "all_frames": false
+    },
+    {
+      "matches": ["*://www.youtube.com/watch*"],
+      "js": ["pinyin-pro.min.js", "pinyin-helper.js", "compound-words.js", "storage.js", "youtube-subtitles.js", "tts-controller.js"],
+      "run_at": "document_idle",
+      "all_frames": false
+    }
+  ]
+}

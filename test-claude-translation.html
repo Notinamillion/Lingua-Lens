@@ -1,0 +1,261 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Test Claude AI Translation</title>
+  <style>
+    body {
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      background: #f5f5f5;
+    }
+    .container {
+      background: white;
+      padding: 30px;
+      border-radius: 12px;
+      box-shadow: 0 2px 10px rgba(0,0,0,0.1);
+    }
+    h1 {
+      color: #333;
+      border-bottom: 3px solid #3b82f6;
+      padding-bottom: 10px;
+    }
+    .section {
+      margin: 20px 0;
+      padding: 15px;
+      border-radius: 8px;
+    }
+    .original {
+      background: #f0f9ff;
+      border-left: 4px solid #3b82f6;
+    }
+    .translated {
+      background: linear-gradient(135deg, #e0f2fe 0%, #fef3c7 100%);
+      border-left: 4px solid #10b981;
+      font-size: 18px;
+      font-weight: 500;
+    }
+    .input-group {
+      margin: 20px 0;
+    }
+    .input-group label {
+      display: block;
+      margin-bottom: 8px;
+      font-weight: 600;
+      color: #666;
+    }
+    .input-group input {
+      width: 100%;
+      padding: 12px;
+      border: 2px solid #e5e7eb;
+      border-radius: 6px;
+      font-size: 14px;
+    }
+    button {
+      background: #3b82f6;
+      color: white;
+      border: none;
+      padding: 12px 24px;
+      border-radius: 6px;
+      cursor: pointer;
+      font-size: 16px;
+      font-weight: 500;
+      transition: background 0.2s;
+    }
+    button:hover {
+      background: #2563eb;
+    }
+    button:disabled {
+      background: #9ca3af;
+      cursor: not-allowed;
+    }
+    .loading {
+      display: none;
+      color: #3b82f6;
+      font-weight: 500;
+      margin: 10px 0;
+    }
+    .error {
+      background: #fee2e2;
+      border-left: 4px solid #ef4444;
+      padding: 15px;
+      border-radius: 6px;
+      color: #991b1b;
+      display: none;
+    }
+    .stats {
+      background: #eff6ff;
+      padding: 10px;
+      border-radius: 6px;
+      font-size: 13px;
+      color: #1e40af;
+      margin-top: 15px;
+    }
+    .info {
+      background: #fef3c7;
+      border-left: 4px solid #f59e0b;
+      padding: 15px;
+      border-radius: 6px;
+      color: #78350f;
+      margin: 20px 0;
+      font-size: 14px;
+    }
+  </style>
+</head>
+<body>
+  <div class="container">
+    <h1>🤖 Test Claude AI Smart Translation</h1>
+
+    <div class="info">
+      <strong>📝 Instructions:</strong>
+      <ol style="margin: 10px 0 0 0; padding-left: 20px;">
+        <li>Enter your Claude API key below (get one at <a href="https://console.anthropic.com/" target="_blank">console.anthropic.com</a>)</li>
+        <li>Click "Test Translation" to see how known English words are translated to Chinese</li>
+        <li>This test uses your actual vocabulary list with 550 words</li>
+      </ol>
+    </div>
+
+    <div class="input-group">
+      <label for="apiKey">Claude API Key:</label>
+      <input type="password" id="apiKey" placeholder="sk-ant-api03-...">
+    </div>
+
+    <button id="testBtn" onclick="testTranslation()">🚀 Test Translation</button>
+
+    <div class="loading" id="loading">⏳ Translating with Claude AI...</div>
+    <div class="error" id="error"></div>
+
+    <div class="section original">
+      <h3>📄 Original English Text:</h3>
+      <p id="originalText">Thousands of species at risk of extinction in Wales have been revealed in a new study.</p>
+    </div>
+
+    <div class="section translated" id="resultSection" style="display: none;">
+      <h3>🌏 Smart Translation (Known Words → Chinese):</h3>
+      <p id="translatedText"></p>
+      <div class="stats" id="stats"></div>
+    </div>
+  </div>
+
+  <script src="claude-api.js"></script>
+  <script>
+    // Load known words from export file
+    const knownWordsPath = 'C:\\Users\\s.bateman\\Downloads\\language-learner-words-1762721287918.json';
+
+    async function loadKnownWords() {
+      try {
+        const response = await fetch(knownWordsPath);
+        const data = await response.json();
+        return data.words;
+      } catch (error) {
+        console.error('Error loading known words:', error);
+        // Fallback: use a subset of common words
+        return getSampleKnownWords();
+      }
+    }
+
+    function getSampleKnownWords() {
+      // Sample of known words for testing if file can't be loaded
+      return {
+        "thousands": { "original": "thousands", "translation": "数千" },
+        "of": { "original": "of", "translation": "的" },
+        "at": { "original": "at", "translation": "在" },
+        "have": { "original": "have", "translation": "有" },
+        "new": { "original": "new", "translation": "新的" },
+        "study": { "original": "study", "translation": "学习" },
+        "and": { "original": "and", "translation": "和" },
+        "the": { "original": "the", "translation": "这个" },
+        "in": { "original": "in", "translation": "在" },
+        "to": { "original": "to", "translation": "到" },
+        "been": { "original": "been", "translation": "是" },
+        "a": { "original": "a", "translation": "一个" }
+      };
+    }
+
+    async function testTranslation() {
+      const apiKey = document.getElementById('apiKey').value.trim();
+
+      if (!apiKey) {
+        showError('Please enter your Claude API key');
+        return;
+      }
+
+      if (!apiKey.startsWith('sk-ant-')) {
+        showError('Invalid API key format. Should start with "sk-ant-"');
+        return;
+      }
+
+      // Show loading
+      document.getElementById('loading').style.display = 'block';
+      document.getElementById('error').style.display = 'none';
+      document.getElementById('resultSection').style.display = 'none';
+      document.getElementById('testBtn').disabled = true;
+
+      try {
+        // Load known words
+        console.log('Loading known words...');
+        const knownWords = await loadKnownWords();
+        const wordCount = Object.keys(knownWords).length;
+        console.log(`Loaded ${wordCount} known words`);
+
+        const englishText = document.getElementById('originalText').textContent;
+
+        console.log('Calling Claude API...');
+        const result = await ClaudeAPI.translateEnglishToChinese(
+          englishText,
+          knownWords,
+          apiKey,
+          ClaudeAPI.MODELS.HAIKU // Using cheapest model
+        );
+
+        console.log('Translation successful!', result);
+
+        // Display result
+        document.getElementById('translatedText').textContent = result.mixedText;
+        document.getElementById('stats').innerHTML = `
+          <strong>API Usage:</strong>
+          ${result.usage.input_tokens} input tokens + ${result.usage.output_tokens} output tokens =
+          <strong>$${result.cost.toFixed(6)}</strong><br>
+          <strong>Model:</strong> ${result.model}<br>
+          <strong>Known Words:</strong> ${wordCount} words in vocabulary
+        `;
+        document.getElementById('resultSection').style.display = 'block';
+        document.getElementById('loading').style.display = 'none';
+
+      } catch (error) {
+        console.error('Translation error:', error);
+        showError(`Translation failed: ${error.message}`);
+      } finally {
+        document.getElementById('testBtn').disabled = false;
+      }
+    }
+
+    function showError(message) {
+      const errorDiv = document.getElementById('error');
+      errorDiv.textContent = message;
+      errorDiv.style.display = 'block';
+      document.getElementById('loading').style.display = 'none';
+    }
+
+    // Auto-fill API key from localStorage if available
+    window.addEventListener('DOMContentLoaded', () => {
+      const savedKey = localStorage.getItem('claudeApiKey');
+      if (savedKey) {
+        document.getElementById('apiKey').value = savedKey;
+      }
+    });
+
+    // Save API key to localStorage when entered
+    document.getElementById('apiKey').addEventListener('blur', (e) => {
+      const key = e.target.value.trim();
+      if (key) {
+        localStorage.setItem('claudeApiKey', key);
+      }
+    });
+  </script>
+</body>
+</html>
