@@ -526,6 +526,14 @@ async function getSyncStatus() {
   };
 }
 
+// Perform initial sync on startup if user is logged in
+chrome.storage.local.get(['syncAuthToken', 'autoSyncEnabled'], (result) => {
+  if (result.syncAuthToken && result.autoSyncEnabled !== false) {
+    console.log('[Sync] Performing initial sync on startup');
+    syncChineseKnownWords();
+  }
+});
+
 // Set up periodic sync alarm (30 minutes)
 chrome.alarms.create('periodicChineseSync', { periodInMinutes: 30 });
 
