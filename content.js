@@ -178,8 +178,15 @@
     if (wordList.length === 0) return { totalOccurrences: 0, uniqueWords: new Set(), wordFrequency: {} };
 
     // Create regex pattern for all known words (case-insensitive, whole words only)
+    // Split into chunks of 200 words max to avoid regex performance issues
     const escapedWords = wordList.map(w => escapeRegex(w));
-    const pattern = new RegExp(`\\b(${escapedWords.join('|')})\\b`, 'gi');
+    const CHUNK_SIZE = 200;
+    const patterns = [];
+
+    for (let i = 0; i < escapedWords.length; i += CHUNK_SIZE) {
+      const chunk = escapedWords.slice(i, i + CHUNK_SIZE);
+      patterns.push(new RegExp(`\\b(${chunk.join('|')})\\b`, 'gi'));
+    }
 
     // Performance stats object
     const stats = {
@@ -193,12 +200,22 @@
       if (processedNodes.has(textNode)) return;
 
       const originalText = textNode.textContent;
-      const matches = originalText.match(pattern);
 
-      if (matches && matches.length > 0) {
-        replaceTextNode(textNode, originalText, pattern, 'learn', stats);
-        processedNodes.add(textNode);
+      // Check if any pattern matches
+      let hasMatches = false;
+      for (const pattern of patterns) {
+        pattern.lastIndex = 0;
+        if (pattern.test(originalText)) {
+          hasMatches = true;
+          break;
+        }
       }
+
+      if (!hasMatches) return;
+
+      // Process with all patterns (replaceTextNode will handle multiple patterns)
+      replaceTextNode(textNode, originalText, patterns, 'learn', stats);
+      processedNodes.add(textNode);
     });
 
     return stats;
@@ -236,30 +253,47 @@
   }
 
   // Replace text node with translated content
-  function replaceTextNode(textNode, originalText, pattern, mode, stats = {}) {
+  function replaceTextNode(textNode, originalText, patterns, mode, stats = {}) {
     const fragment = document.createDocumentFragment();
     let lastIndex = 0;
     let match;
 
-    // Collect all matches first
+    // Collect all matches from all patterns
     const matches = [];
-    pattern.lastIndex = 0;
-    while ((match = pattern.exec(originalText)) !== null) {
-      matches.push({
-        text: match[0],
-        index: match.index,
-        endIndex: pattern.lastIndex
-      });
+
+    // Handle both single pattern and array of patterns
+    const patternsArray = Array.isArray(patterns) ? patterns : [patterns];
+
+    for (const pattern of patternsArray) {
+      pattern.lastIndex = 0;
+      while ((match = pattern.exec(originalText)) !== null) {
+        matches.push({
+          text: match[0],
+          index: match.index,
+          endIndex: pattern.lastIndex
+        });
+      }
+    }
+
+    // Sort matches by index and remove duplicates/overlaps
+    matches.sort((a, b) => a.index - b.index);
+    const uniqueMatches = [];
+    for (let i = 0; i < matches.length; i++) {
+      const current = matches[i];
+      // Skip if this match overlaps with the previous one
+      if (uniqueMatches.length === 0 || current.index >= uniqueMatches[uniqueMatches.length - 1].endIndex) {
+        uniqueMatches.push(current);
+      }
     }
 
     // If compound words dictionary is available, check for compounds
-    if (typeof window.findCompound === 'function' && matches.length > 0) {
+    if (typeof window.findCompound === 'function' && uniqueMatches.length > 0) {
       const processedIndices = new Set();
 
-      for (let i = 0; i < matches.length; i++) {
+      for (let i = 0; i < uniqueMatches.length; i++) {
         if (processedIndices.has(i)) continue;
 
-        const currentMatch = matches[i];
+        const currentMatch = uniqueMatches[i];
         const matchedWord = currentMatch.text;
         const wordKey = matchedWord.toLowerCase();
         const wordData = knownWords[wordKey];
@@ -268,8 +302,8 @@
 
         // Check if this is part of a compound word with following words
         const chineseWords = [wordData.translation];
-        for (let j = i + 1; j < matches.length && j <= i + 2; j++) {
-          const nextWord = matches[j].text.toLowerCase();
+        for (let j = i + 1; j < uniqueMatches.length && j <= i + 2; j++) {
+          const nextWord = uniqueMatches[j].text.toLowerCase();
           const nextData = knownWords[nextWord];
           if (nextData) {
             chineseWords.push(nextData.translation);
@@ -295,8 +329,8 @@
 
           // Track statistics for all words in compound
           if (stats) {
-            for (let j = i; j < i + compoundLength && j < matches.length; j++) {
-              const word = matches[j].text.toLowerCase();
+            for (let j = i; j < i + compoundLength && j < uniqueMatches.length; j++) {
+              const word = uniqueMatches[j].text.toLowerCase();
               stats.totalOccurrences = (stats.totalOccurrences || 0) + 1;
               stats.uniqueWords = stats.uniqueWords || new Set();
               stats.uniqueWords.add(word);
@@ -313,8 +347,8 @@
 
           // Build data-original from all matched words
           const originalWords = [];
-          for (let j = i; j < i + compoundLength && j < matches.length; j++) {
-            originalWords.push(matches[j].text);
+          for (let j = i; j < i + compoundLength && j < uniqueMatches.length; j++) {
+            originalWords.push(uniqueMatches[j].text);
           }
           span.setAttribute('data-original', originalWords.join(' '));
           span.setAttribute('data-compound', compoundResult.compound);
@@ -336,7 +370,7 @@
           }
 
           fragment.appendChild(span);
-          lastIndex = matches[i + compoundLength - 1].endIndex;
+          lastIndex = uniqueMatches[i + compoundLength - 1].endIndex;
         } else {
           // No compound - process single word normally
           if (stats) {
@@ -378,10 +412,9 @@
         }
       }
     } else {
-      // No compound words support - fallback to original behavior
-      pattern.lastIndex = 0;
-      while ((match = pattern.exec(originalText)) !== null) {
-        const matchedWord = match[0];
+      // No compound words support - use already collected matches
+      for (const match of uniqueMatches) {
+        const matchedWord = match.text;
         const wordKey = matchedWord.toLowerCase();
         const wordData = knownWords[wordKey];
 
@@ -433,7 +466,7 @@
         }
 
         fragment.appendChild(span);
-        lastIndex = pattern.lastIndex;
+        lastIndex = match.endIndex;
       }
     }
 
@@ -779,45 +812,68 @@
     }
 
     let highlightCount = 0;
+
+    // Build sorted array of known words (longest first for greedy matching)
+    const sortedWords = Array.from(chineseKnownWords).sort((a, b) => b.length - a.length);
+
     textNodes.forEach(textNode => {
       const text = textNode.textContent;
       const fragment = document.createDocumentFragment();
-      let lastIndex = 0;
-      let modified = false;
+      const matches = []; // Store all match positions
 
-      // Check each possible word (from longest to shortest for greedy matching)
-      for (let i = 0; i < text.length; i++) {
-        for (let length = Math.min(10, text.length - i); length > 0; length--) {
-          const word = text.substr(i, length);
+      // Find all matches using optimized single-pass algorithm
+      for (const word of sortedWords) {
+        let startIndex = 0;
+        let index;
 
-          if (chineseKnownWords.has(word) && containsChinese(word)) {
-            // Add text before the known word
-            if (i > lastIndex) {
-              fragment.appendChild(document.createTextNode(text.substring(lastIndex, i)));
-            }
+        while ((index = text.indexOf(word, startIndex)) !== -1) {
+          // Check if this position is already covered by a longer match
+          const overlaps = matches.some(m =>
+            (index >= m.start && index < m.end) ||
+            (index + word.length > m.start && index < m.end)
+          );
 
-            // Create highlighted span for known word
-            const span = document.createElement('span');
-            span.className = 'chinese-known-word ' + chineseHighlightStyle;
-            span.textContent = word;
-            span.dataset.word = word;
-            span.title = 'Known word';
-            fragment.appendChild(span);
-
-            lastIndex = i + length;
-            i += length - 1;
-            modified = true;
-            highlightCount++;
-            break;
+          if (!overlaps) {
+            matches.push({
+              start: index,
+              end: index + word.length,
+              word: word
+            });
           }
+
+          startIndex = index + 1;
         }
       }
 
-      // Add remaining text
-      if (modified) {
+      if (matches.length > 0) {
+        // Sort matches by start position
+        matches.sort((a, b) => a.start - b.start);
+
+        let lastIndex = 0;
+
+        for (const match of matches) {
+          // Add text before the match
+          if (match.start > lastIndex) {
+            fragment.appendChild(document.createTextNode(text.substring(lastIndex, match.start)));
+          }
+
+          // Create highlighted span for known word
+          const span = document.createElement('span');
+          span.className = 'chinese-known-word ' + chineseHighlightStyle;
+          span.textContent = match.word;
+          span.dataset.word = match.word;
+          span.title = 'Known word';
+          fragment.appendChild(span);
+
+          lastIndex = match.end;
+          highlightCount++;
+        }
+
+        // Add remaining text
         if (lastIndex < text.length) {
           fragment.appendChild(document.createTextNode(text.substring(lastIndex)));
         }
+
         textNode.parentNode.replaceChild(fragment, textNode);
         chineseProcessedNodes.add(textNode);
       }
