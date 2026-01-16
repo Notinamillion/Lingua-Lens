@@ -419,45 +419,61 @@ async function markChineseWordAsKnown(word, tabId) {
 // Sync Chinese known words from Synology server
 async function syncChineseKnownWords() {
   try {
-    // Get sync token from local storage
-    const result = await chrome.storage.local.get(['syncToken', 'syncEnabled']);
+    // Get auth token from local storage
+    const result = await chrome.storage.local.get(['syncAuthToken', 'autoSyncEnabled']);
 
-    if (!result.syncToken) {
-      console.log('[Sync] No sync token configured');
-      return { success: false, error: 'No sync token configured' };
+    if (!result.syncAuthToken) {
+      console.log('[Sync] Not logged in');
+      return { success: false, error: 'Not logged in' };
     }
 
-    if (result.syncEnabled === false) {
+    if (result.autoSyncEnabled === false) {
       console.log('[Sync] Auto-sync is disabled');
       return { success: false, error: 'Auto-sync disabled' };
     }
 
-    // Fetch known words from website API
-    const response = await fetch(`${WEBSITE_URL}/api/export-known-words`, {
+    // Fetch progress data from API using Bearer token
+    const response = await fetch(`${WEBSITE_URL}/api/progress`, {
       method: 'GET',
       headers: {
-        'X-Sync-Token': result.syncToken
+        'Authorization': `Bearer ${result.syncAuthToken}`
       }
     });
 
-    const data = await response.json();
-
-    if (!response.ok || !data.success) {
-      if (data.expired) {
-        console.error('[Sync] Token expired');
-        return { success: false, error: 'Token expired', expired: true };
-      }
-      throw new Error(data.error || 'Sync failed');
+    // Handle 401 Unauthorized (token expired or invalid)
+    if (response.status === 401) {
+      console.error('[Sync] Token expired or invalid');
+      // Clear auth token
+      await chrome.storage.local.remove(['syncAuthToken', 'syncUsername']);
+      return { success: false, error: 'Authentication failed - please log in again', expired: true };
     }
 
-    // Update Chinese known words
-    const chineseKnownWords = data.knownWords || [];
-    await chrome.storage.sync.set({ chineseKnownWords: chineseKnownWords });
+    if (!response.ok) {
+      throw new Error(`Server returned ${response.status}`);
+    }
+
+    const progressData = await response.json();
+
+    // Extract known words from compoundProgress
+    const knownWords = [];
+    if (progressData.compoundProgress) {
+      Object.values(progressData.compoundProgress).forEach(charData => {
+        if (charData.known && Array.isArray(charData.known)) {
+          knownWords.push(...charData.known);
+        }
+      });
+    }
+
+    // Remove duplicates
+    const uniqueKnownWords = [...new Set(knownWords)];
+
+    // Update Chinese known words in storage
+    await chrome.storage.sync.set({ chineseKnownWords: uniqueKnownWords });
 
     // Update sync status
     const syncStatus = {
       lastSync: Date.now(),
-      lastSyncCount: chineseKnownWords.length,
+      lastSyncCount: uniqueKnownWords.length,
       lastSyncStatus: 'success'
     };
     await chrome.storage.local.set(syncStatus);
@@ -468,12 +484,12 @@ async function syncChineseKnownWords() {
       chrome.tabs.sendMessage(tab.id, { action: 'refreshChineseHighlights' }).catch(() => {});
     });
 
-    console.log(`[Sync] Successfully synced ${chineseKnownWords.length} Chinese words`);
+    console.log(`[Sync] Successfully synced ${uniqueKnownWords.length} Chinese words`);
 
     return {
       success: true,
-      count: chineseKnownWords.length,
-      message: `Synced ${chineseKnownWords.length} Chinese words from server`
+      count: uniqueKnownWords.length,
+      message: `Synced ${uniqueKnownWords.length} Chinese words from server`
     };
 
   } catch (error) {
@@ -510,8 +526,8 @@ async function getSyncStatus() {
   };
 }
 
-// Set up periodic sync alarm (60 minutes)
-chrome.alarms.create('periodicChineseSync', { periodInMinutes: 60 });
+// Set up periodic sync alarm (30 minutes)
+chrome.alarms.create('periodicChineseSync', { periodInMinutes: 30 });
 
 // Handle periodic sync alarm
 chrome.alarms.onAlarm.addListener(async function(alarm) {

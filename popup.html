@@ -180,12 +180,15 @@
 
     <!-- Synology Server Sync Section -->
     <section class="section sync-section">
-      <h2>Synology Server Sync</h2>
+      <h2>Chinese Word Map Sync</h2>
       <p class="subtitle">Sync with Chinese Word Map (192.168.1.222:3000)</p>
 
       <div class="sync-status">
         <div>
-          Status: <strong id="syncStatus" class="status-never">Not configured</strong>
+          Status: <strong id="syncStatus" class="status-never">Not logged in</strong>
+        </div>
+        <div id="syncUserInfo" style="display: none;">
+          Logged in as: <strong id="syncUsername">-</strong>
         </div>
         <div>
           Last Sync: <strong id="lastSyncTime">Never</strong>
@@ -195,22 +198,38 @@
         </div>
       </div>
 
-      <div class="form-group">
-        <label for="syncToken">Sync Token</label>
-        <input type="text" id="syncToken" placeholder="Paste sync token from website...">
+      <!-- Login Form (shown when not logged in) -->
+      <div id="loginForm">
+        <div class="form-group">
+          <label for="syncUsername">Username</label>
+          <input type="text" id="syncUsernameInput" placeholder="Enter username..." autocomplete="username">
+        </div>
+
+        <div class="form-group">
+          <label for="syncPassword">Password</label>
+          <input type="password" id="syncPassword" placeholder="Enter password..." autocomplete="current-password">
+        </div>
+
+        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
+          <button id="loginBtn" class="btn btn-primary">Login</button>
+          <button id="visitWebsite" class="btn btn-secondary">Open Website</button>
+        </div>
       </div>
 
-      <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-        <button id="saveSyncToken" class="btn btn-primary">Save Token</button>
-        <button id="syncNow" class="btn btn-secondary">Sync Now</button>
-        <button id="visitWebsite" class="btn btn-secondary">Open Website</button>
-      </div>
+      <!-- Logged In Controls (shown when logged in) -->
+      <div id="loggedInControls" style="display: none;">
+        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
+          <button id="syncNow" class="btn btn-primary">Sync Now</button>
+          <button id="logoutBtn" class="btn btn-secondary">Logout</button>
+          <button id="visitWebsiteLoggedIn" class="btn btn-secondary">Open Website</button>
+        </div>
 
-      <div class="form-group checkbox-group">
-        <label>
-          <input type="checkbox" id="autoSync" checked>
-          <span>Enable automatic sync (every 60 minutes)</span>
-        </label>
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="autoSync" checked>
+            <span>Enable automatic sync (every 30 minutes)</span>
+          </label>
+        </div>
       </div>
     </section>
 

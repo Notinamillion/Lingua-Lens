@@ -575,59 +575,118 @@ function formatTime(timestamp) {
 
 // Load and display sync status
 async function loadSyncStatus() {
-  chrome.runtime.sendMessage({ action: 'getSyncStatus' }, (status) => {
-    if (!status) return;
+  const result = await chrome.storage.local.get(['syncAuthToken', 'syncUsername', 'lastSync', 'lastSyncCount', 'lastSyncStatus', 'autoSyncEnabled']);
 
-    const syncStatusEl = document.getElementById('syncStatus');
-    const lastSyncTimeEl = document.getElementById('lastSyncTime');
-    const lastSyncCountEl = document.getElementById('lastSyncCount');
-    const autoSyncCheckbox = document.getElementById('autoSync');
+  const syncStatusEl = document.getElementById('syncStatus');
+  const syncUsernameEl = document.getElementById('syncUsername');
+  const syncUserInfo = document.getElementById('syncUserInfo');
+  const lastSyncTimeEl = document.getElementById('lastSyncTime');
+  const lastSyncCountEl = document.getElementById('lastSyncCount');
+  const autoSyncCheckbox = document.getElementById('autoSync');
 
-    // Update status display
-    if (!status.configured) {
-      syncStatusEl.textContent = 'Not configured';
-      syncStatusEl.className = 'status-never';
-    } else if (!status.enabled) {
-      syncStatusEl.textContent = 'Disabled';
-      syncStatusEl.className = 'status-error';
-    } else if (status.status === 'success') {
-      syncStatusEl.textContent = 'Active';
+  const loginForm = document.getElementById('loginForm');
+  const loggedInControls = document.getElementById('loggedInControls');
+
+  const isLoggedIn = !!result.syncAuthToken;
+
+  if (isLoggedIn) {
+    // Show logged in state
+    loginForm.style.display = 'none';
+    loggedInControls.style.display = 'block';
+    syncUserInfo.style.display = 'block';
+
+    syncUsernameEl.textContent = result.syncUsername || 'Unknown';
+
+    // Update status
+    if (result.lastSyncStatus === 'success') {
+      syncStatusEl.textContent = 'Synced';
       syncStatusEl.className = 'status-success';
-    } else if (status.status === 'error') {
-      syncStatusEl.textContent = `Error: ${status.error || 'Unknown'}`;
+    } else if (result.lastSyncStatus === 'error') {
+      syncStatusEl.textContent = 'Error';
       syncStatusEl.className = 'status-error';
     } else {
-      syncStatusEl.textContent = 'Ready';
+      syncStatusEl.textContent = 'Ready to sync';
       syncStatusEl.className = 'status-never';
     }
+  } else {
+    // Show login form
+    loginForm.style.display = 'block';
+    loggedInControls.style.display = 'none';
+    syncUserInfo.style.display = 'none';
 
-    // Update last sync time
-    lastSyncTimeEl.textContent = formatTime(status.lastSync);
+    syncStatusEl.textContent = 'Not logged in';
+    syncStatusEl.className = 'status-never';
+  }
 
-    // Update sync count
-    lastSyncCountEl.textContent = status.lastSyncCount || 0;
+  // Update last sync info
+  lastSyncTimeEl.textContent = formatTime(result.lastSync);
+  lastSyncCountEl.textContent = result.lastSyncCount || 0;
 
-    // Update checkbox
-    autoSyncCheckbox.checked = status.enabled;
-  });
+  if (autoSyncCheckbox) {
+    autoSyncCheckbox.checked = result.autoSyncEnabled !== false; // Default to true
+  }
 }
 
-// Save sync token
-async function saveSyncToken() {
-  const token = document.getElementById('syncToken').value.trim();
+// Login to server
+async function loginToServer() {
+  const username = document.getElementById('syncUsernameInput').value.trim();
+  const password = document.getElementById('syncPassword').value;
 
-  if (!token) {
-    showStatus('Please enter a sync token', 'error');
+  if (!username || !password) {
+    showStatus('Please enter username and password', 'error');
     return;
   }
 
-  await chrome.storage.local.set({
-    syncToken: token,
-    syncEnabled: true
-  });
+  const btn = document.getElementById('loginBtn');
+  const originalText = btn.textContent;
+  btn.textContent = 'Logging in...';
+  btn.disabled = true;
 
-  document.getElementById('syncToken').value = '';
-  showStatus('Sync token saved successfully!', 'success');
+  try {
+    const response = await fetch(`${WEBSITE_URL}/api/auth/login`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json'
+      },
+      body: JSON.stringify({ username, password })
+    });
+
+    const data = await response.json();
+
+    if (!response.ok || !data.success) {
+      throw new Error(data.message || 'Login failed');
+    }
+
+    // Save auth token and username
+    await chrome.storage.local.set({
+      syncAuthToken: data.token,
+      syncUsername: data.username,
+      autoSyncEnabled: true
+    });
+
+    // Clear password field
+    document.getElementById('syncPassword').value = '';
+    document.getElementById('syncUsernameInput').value = '';
+
+    showStatus('Logged in successfully!', 'success');
+    await loadSyncStatus();
+
+    // Trigger initial sync
+    chrome.runtime.sendMessage({ action: 'syncNow' });
+
+  } catch (error) {
+    console.error('Login error:', error);
+    showStatus(`Login failed: ${error.message}`, 'error');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
+// Logout
+async function logout() {
+  await chrome.storage.local.remove(['syncAuthToken', 'syncUsername']);
+  showStatus('Logged out successfully', 'success');
   await loadSyncStatus();
 }
 
@@ -655,7 +714,8 @@ async function syncNow() {
 // Toggle auto-sync
 function toggleAutoSync() {
   const enabled = document.getElementById('autoSync').checked;
-  chrome.storage.local.set({ syncEnabled: enabled }, () => {
+  chrome.storage.local.set({ autoSyncEnabled: enabled }, () => {
+    chrome.runtime.sendMessage({ action: 'toggleAutoSync', enabled });
     loadSyncStatus();
   });
 }
@@ -676,10 +736,19 @@ document.getElementById('syncKnownWords').addEventListener('click', syncKnownWor
 document.getElementById('highlightStyle').addEventListener('change', updateHighlightStyle);
 
 // Event listeners for sync
-document.getElementById('saveSyncToken').addEventListener('click', saveSyncToken);
+document.getElementById('loginBtn').addEventListener('click', loginToServer);
+document.getElementById('logoutBtn').addEventListener('click', logout);
 document.getElementById('syncNow').addEventListener('click', syncNow);
 document.getElementById('autoSync').addEventListener('change', toggleAutoSync);
 document.getElementById('visitWebsite').addEventListener('click', visitWebsite);
+document.getElementById('visitWebsiteLoggedIn').addEventListener('click', visitWebsite);
+
+// Allow Enter key to submit login
+document.getElementById('syncPassword').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    loginToServer();
+  }
+});
 
 // Load Chinese words and sync status on popup open
 loadChineseWords();
