@@ -497,6 +497,58 @@ function updateHighlightStyle() {
   });
 }
 
+// Sync all known word translations to Chinese known words
+async function syncKnownWordsToChinese() {
+  const btn = document.getElementById('syncKnownWords');
+  const originalText = btn.textContent;
+  btn.textContent = 'Syncing...';
+  btn.disabled = true;
+
+  try {
+    // Get all known words
+    const knownWords = await StorageManager.getWords();
+
+    // Get current Chinese known words
+    const result = await chrome.storage.sync.get(['chineseKnownWords']);
+    let chineseKnownWords = result.chineseKnownWords || [];
+
+    let addedCount = 0;
+
+    // Add all Chinese translations
+    for (const [key, wordData] of Object.entries(knownWords)) {
+      const translation = wordData.translation;
+      // Check if translation contains Chinese characters
+      if (translation && /[\u4e00-\u9fff]/.test(translation)) {
+        if (!chineseKnownWords.includes(translation)) {
+          chineseKnownWords.push(translation);
+          addedCount++;
+        }
+      }
+    }
+
+    // Save updated list
+    await chrome.storage.sync.set({ chineseKnownWords });
+
+    // Reload Chinese words display
+    await loadChineseWords();
+
+    // Refresh content scripts
+    chrome.tabs.query({}, (tabs) => {
+      tabs.forEach((tab) => {
+        chrome.tabs.sendMessage(tab.id, { action: 'refreshChineseHighlights' }).catch(() => {});
+      });
+    });
+
+    showStatus(`Added ${addedCount} Chinese words to highlight list!`, 'success');
+  } catch (error) {
+    console.error('Sync error:', error);
+    showStatus('Failed to sync words', 'error');
+  } finally {
+    btn.textContent = originalText;
+    btn.disabled = false;
+  }
+}
+
 // ============================================
 // Synology Server Sync
 // ============================================
@@ -620,6 +672,7 @@ document.getElementById('chineseWord').addEventListener('keypress', (e) => {
     addChineseWord();
   }
 });
+document.getElementById('syncKnownWords').addEventListener('click', syncKnownWordsToChinese);
 document.getElementById('highlightStyle').addEventListener('change', updateHighlightStyle);
 
 // Event listeners for sync

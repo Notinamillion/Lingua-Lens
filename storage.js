@@ -79,7 +79,18 @@ const StorageManager = {
           };
         }
 
-        chrome.storage.local.set({ knownWords }, () => {
+        chrome.storage.local.set({ knownWords }, async () => {
+          // Also add Chinese translation to chineseKnownWords for highlighting
+          if (translation && /[\u4e00-\u9fff]/.test(translation)) {
+            chrome.storage.sync.get(['chineseKnownWords'], (result) => {
+              const chineseKnownWords = result.chineseKnownWords || [];
+              if (!chineseKnownWords.includes(translation)) {
+                chineseKnownWords.push(translation);
+                chrome.storage.sync.set({ chineseKnownWords });
+                console.log(`[Auto-sync] Added '${translation}' to Chinese known words`);
+              }
+            });
+          }
           resolve(knownWords[wordKey]);
         });
       });
@@ -96,7 +107,20 @@ const StorageManager = {
         if (knownWords[wordKey]) {
           knownWords[wordKey].translation = newTranslation;
           knownWords[wordKey].lastSeen = Date.now();
-          chrome.storage.local.set({ knownWords }, () => resolve(knownWords[wordKey]));
+          chrome.storage.local.set({ knownWords }, () => {
+            // Also add Chinese translation to chineseKnownWords for highlighting
+            if (newTranslation && /[\u4e00-\u9fff]/.test(newTranslation)) {
+              chrome.storage.sync.get(['chineseKnownWords'], (result) => {
+                const chineseKnownWords = result.chineseKnownWords || [];
+                if (!chineseKnownWords.includes(newTranslation)) {
+                  chineseKnownWords.push(newTranslation);
+                  chrome.storage.sync.set({ chineseKnownWords });
+                  console.log(`[Auto-sync] Added '${newTranslation}' to Chinese known words`);
+                }
+              });
+            }
+            resolve(knownWords[wordKey]);
+          });
         } else {
           resolve(null);
         }
