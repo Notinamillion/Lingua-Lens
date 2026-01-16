@@ -740,11 +740,14 @@ document.getElementById('loginBtn').addEventListener('click', loginToServer);
 document.getElementById('logoutBtn').addEventListener('click', logout);
 document.getElementById('syncNow').addEventListener('click', syncNow);
 document.getElementById('autoSync').addEventListener('change', toggleAutoSync);
-document.getElementById('visitWebsite').addEventListener('click', visitWebsite);
-document.getElementById('visitWebsiteLoggedIn').addEventListener('click', visitWebsite);
 
 // Allow Enter key to submit login
 document.getElementById('syncPassword').addEventListener('keypress', (e) => {
+  if (e.key === 'Enter') {
+    loginToServer();
+  }
+});
+document.getElementById('syncUsernameInput').addEventListener('keypress', (e) => {
   if (e.key === 'Enter') {
     loginToServer();
   }

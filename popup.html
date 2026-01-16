@@ -181,53 +181,36 @@
     <!-- Synology Server Sync Section -->
     <section class="section sync-section">
       <h2>Chinese Word Map Sync</h2>
-      <p class="subtitle">Sync with Chinese Word Map (192.168.1.222:3000)</p>
-
-      <div class="sync-status">
-        <div>
-          Status: <strong id="syncStatus" class="status-never">Not logged in</strong>
-        </div>
-        <div id="syncUserInfo" style="display: none;">
-          Logged in as: <strong id="syncUsername">-</strong>
-        </div>
-        <div>
-          Last Sync: <strong id="lastSyncTime">Never</strong>
-        </div>
-        <div>
-          Synced Words: <strong id="lastSyncCount">0</strong>
-        </div>
-      </div>
 
       <!-- Login Form (shown when not logged in) -->
       <div id="loginForm">
         <div class="form-group">
-          <label for="syncUsername">Username</label>
-          <input type="text" id="syncUsernameInput" placeholder="Enter username..." autocomplete="username">
+          <input type="text" id="syncUsernameInput" placeholder="Username" autocomplete="username">
         </div>
 
         <div class="form-group">
-          <label for="syncPassword">Password</label>
-          <input type="password" id="syncPassword" placeholder="Enter password..." autocomplete="current-password">
+          <input type="password" id="syncPassword" placeholder="Password" autocomplete="current-password">
         </div>
 
-        <div style="display: flex; gap: 8px; flex-wrap: wrap;">
-          <button id="loginBtn" class="btn btn-primary">Login</button>
-          <button id="visitWebsite" class="btn btn-secondary">Open Website</button>
-        </div>
+        <button id="loginBtn" class="btn btn-primary" style="width: 100%;">Login to Sync</button>
       </div>
 
       <!-- Logged In Controls (shown when logged in) -->
       <div id="loggedInControls" style="display: none;">
-        <div style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 12px;">
-          <button id="syncNow" class="btn btn-primary">Sync Now</button>
-          <button id="logoutBtn" class="btn btn-secondary">Logout</button>
-          <button id="visitWebsiteLoggedIn" class="btn btn-secondary">Open Website</button>
+        <div style="display: flex; align-items: center; justify-content: space-between; margin-bottom: 12px; padding: 8px 12px; background: #f0f0f0; border-radius: 4px;">
+          <div>
+            <div style="font-size: 12px; color: #666;">Logged in as <strong id="syncUsername">-</strong></div>
+            <div style="font-size: 11px; color: #999;"><span id="lastSyncCount">0</span> words • <span id="lastSyncTime">Never</span></div>
+          </div>
+          <button id="logoutBtn" class="btn btn-secondary" style="padding: 4px 12px; font-size: 12px;">Logout</button>
         </div>
 
-        <div class="form-group checkbox-group">
+        <button id="syncNow" class="btn btn-primary" style="width: 100%;">Sync Now</button>
+
+        <div class="form-group checkbox-group" style="margin-top: 12px;">
           <label>
             <input type="checkbox" id="autoSync" checked>
-            <span>Enable automatic sync (every 30 minutes)</span>
+            <span style="font-size: 13px;">Auto-sync every 30 minutes</span>
           </label>
         </div>
       </div>
