@@ -12,6 +12,13 @@
   let observer = null;
   let tooltipTimeout = null;
 
+  // Pattern caching for performance optimization
+  let cachedPatterns = null;
+  let cachedKnownWordsHash = null;
+
+  // Debounce timeout for storage changes
+  let storageChangeTimeout = null;
+
   // Notification element
   let notificationElement = null;
 
@@ -177,16 +184,8 @@
     const wordList = Object.keys(knownWords);
     if (wordList.length === 0) return { totalOccurrences: 0, uniqueWords: new Set(), wordFrequency: {} };
 
-    // Create regex pattern for all known words (case-insensitive, whole words only)
-    // Split into chunks of 200 words max to avoid regex performance issues
-    const escapedWords = wordList.map(w => escapeRegex(w));
-    const CHUNK_SIZE = 200;
-    const patterns = [];
-
-    for (let i = 0; i < escapedWords.length; i += CHUNK_SIZE) {
-      const chunk = escapedWords.slice(i, i + CHUNK_SIZE);
-      patterns.push(new RegExp(`\\b(${chunk.join('|')})\\b`, 'gi'));
-    }
+    // Get compiled patterns (with caching)
+    const patterns = getCompiledPatterns(knownWords);
 
     // Performance stats object
     const stats = {
@@ -751,6 +750,38 @@
     return string.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
   }
 
+  // Get compiled regex patterns with caching
+  function getCompiledPatterns(knownWords) {
+    const wordList = Object.keys(knownWords);
+
+    // Create hash of known words (sorted for consistency)
+    const currentHash = wordList.sort().join('|');
+
+    // Return cached patterns if words haven't changed
+    if (cachedPatterns && cachedKnownWordsHash === currentHash) {
+      console.log('[Performance] Using cached regex patterns');
+      return cachedPatterns;
+    }
+
+    console.log('[Performance] Compiling new regex patterns for', wordList.length, 'words');
+
+    // Compile new patterns
+    const escapedWords = wordList.map(w => escapeRegex(w));
+    const patterns = [];
+    const CHUNK_SIZE = 200;
+
+    for (let i = 0; i < escapedWords.length; i += CHUNK_SIZE) {
+      const chunk = escapedWords.slice(i, i + CHUNK_SIZE);
+      patterns.push(new RegExp(`\\b(${chunk.join('|')})\\b`, 'gi'));
+    }
+
+    // Cache patterns and hash
+    cachedPatterns = patterns;
+    cachedKnownWordsHash = currentHash;
+
+    return patterns;
+  }
+
   // ============================================
   // Chinese Word Highlighting (Known Words)
   // ============================================
@@ -819,24 +850,44 @@
     textNodes.forEach(textNode => {
       const text = textNode.textContent;
       const fragment = document.createDocumentFragment();
-      const matches = []; // Store all match positions
+      const matches = []; // Store all match positions (kept sorted by start position)
 
-      // Find all matches using optimized single-pass algorithm
+      // Find all matches using optimized algorithm with binary search for overlap detection
       for (const word of sortedWords) {
         let startIndex = 0;
         let index;
 
         while ((index = text.indexOf(word, startIndex)) !== -1) {
-          // Check if this position is already covered by a longer match
-          const overlaps = matches.some(m =>
-            (index >= m.start && index < m.end) ||
-            (index + word.length > m.start && index < m.end)
-          );
+          const end = index + word.length;
+
+          // Binary search for overlaps - O(log n) instead of O(n)
+          let overlaps = false;
+          let left = 0;
+          let right = matches.length - 1;
+
+          while (left <= right) {
+            const mid = Math.floor((left + right) / 2);
+            const m = matches[mid];
+
+            // Check if current position overlaps with match at mid
+            if (index < m.end && end > m.start) {
+              overlaps = true;
+              break;
+            }
+
+            // Navigate to correct part of array
+            if (end <= m.start) {
+              right = mid - 1;
+            } else {
+              left = mid + 1;
+            }
+          }
 
           if (!overlaps) {
-            matches.push({
+            // Insert in sorted position (left is the correct insertion point)
+            matches.splice(left, 0, {
               start: index,
-              end: index + word.length,
+              end: end,
               word: word
             });
           }
@@ -846,9 +897,7 @@
       }
 
       if (matches.length > 0) {
-        // Sort matches by start position
-        matches.sort((a, b) => a.start - b.start);
-
+        // Matches are already sorted by start position from binary search insertion
         let lastIndex = 0;
 
         for (const match of matches) {
@@ -886,11 +935,24 @@
 
   // Listen for Chinese known words storage changes
   chrome.storage.onChanged.addListener(function(changes, namespace) {
+    // Invalidate pattern cache when known words change
+    if (namespace === 'local' && changes.knownWords) {
+      console.log('[Performance] Invalidating pattern cache due to knownWords change');
+      cachedPatterns = null;
+      cachedKnownWordsHash = null;
+    }
+
+    // Re-highlight Chinese words when they change (debounced)
     if (namespace === 'sync' && (changes.chineseKnownWords || changes.chineseHighlightStyle)) {
-      loadChineseKnownWords().then(() => {
-        chineseProcessedNodes = new WeakSet();
-        highlightChineseKnownWords();
-      });
+      clearTimeout(storageChangeTimeout);
+
+      storageChangeTimeout = setTimeout(() => {
+        console.log('[Performance] Debounced Chinese word re-highlighting');
+        loadChineseKnownWords().then(() => {
+          chineseProcessedNodes = new WeakSet();
+          highlightChineseKnownWords();
+        });
+      }, 300); // Wait 300ms before re-highlighting
     }
   });
 
