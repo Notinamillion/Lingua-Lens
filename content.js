@@ -561,24 +561,76 @@
   }
 
   // Set up mutation observer for dynamic content
+  // Process a specific subtree (for incremental mutation processing)
+  function processSubtree(root, mode) {
+    if (!settings.autoTranslate) return;
+    if (!root || !root.nodeType) return;
+
+    // Use the same mode as the page
+    const actualMode = mode || determineMode(detectPageLanguage());
+
+    if (actualMode === 'learn') {
+      // Get cached patterns
+      const patterns = getCompiledPatterns(knownWords);
+      if (patterns.length === 0) return;
+
+      // Walk through text nodes in this subtree only
+      walkTextNodes(root, (textNode) => {
+        if (processedNodes.has(textNode)) return;
+
+        const originalText = textNode.textContent;
+
+        // Check if any pattern matches (early exit)
+        let hasMatches = false;
+        for (const pattern of patterns) {
+          pattern.lastIndex = 0;
+          if (pattern.test(originalText)) {
+            hasMatches = true;
+            break;
+          }
+        }
+
+        if (!hasMatches) return;
+
+        // Process with all patterns
+        const stats = { totalOccurrences: 0, uniqueWords: new Set(), wordFrequency: {} };
+        replaceTextNode(textNode, originalText, patterns, 'learn', stats);
+        processedNodes.add(textNode);
+      });
+    }
+  }
+
   function setupMutationObserver() {
     if (observer) return;
 
     observer = new MutationObserver((mutations) => {
-      let shouldProcess = false;
+      // Collect mutated roots for incremental processing
+      const mutatedRoots = new Set();
 
       for (const mutation of mutations) {
         if (mutation.type === 'childList' && mutation.addedNodes.length > 0) {
-          shouldProcess = true;
-          break;
+          mutation.addedNodes.forEach(node => {
+            if (node.nodeType === Node.ELEMENT_NODE && !processedNodes.has(node)) {
+              mutatedRoots.add(node);
+            }
+          });
         }
       }
 
-      if (shouldProcess) {
+      if (mutatedRoots.size > 0) {
         // Debounce processing
         clearTimeout(setupMutationObserver.timeout);
         setupMutationObserver.timeout = setTimeout(() => {
-          processPage();
+          console.log('[Performance] Processing', mutatedRoots.size, 'mutated subtrees incrementally');
+
+          // Detect mode once for all subtrees
+          const pageLanguage = detectPageLanguage();
+          const mode = determineMode(pageLanguage);
+
+          // Process each mutated subtree instead of entire page
+          mutatedRoots.forEach(root => {
+            processSubtree(root, mode);
+          });
         }, 500);
       }
     });
